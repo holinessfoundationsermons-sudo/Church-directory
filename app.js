@@ -6,10 +6,14 @@ import {
   onAuthStateChanged,
   signOut
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+
 import {
   getFirestore,
   collection,
-  getDocs
+  getDocs,
+  doc,
+  setDoc,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -20,6 +24,8 @@ const firebaseConfig = {
   messagingSenderId: "19161243529",
   appId: "1:19161243529:web:2e238ef54b2e0bfedecb58"
 };
+
+const ADMIN_PHONE = "+18595443280";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -38,6 +44,7 @@ const empty = document.querySelector("#empty");
 
 let confirmationResult = null;
 let members = [];
+let currentUser = null;
 
 function showMessage(text) {
   message.textContent = text;
@@ -45,13 +52,22 @@ function showMessage(text) {
 
 function normalizePhone(value) {
   const trimmed = value.trim();
-  if (trimmed.startsWith("+")) return trimmed.replace(/[^\d+]/g, "");
+
+  if (trimmed.startsWith("+")) {
+    return trimmed.replace(/[^\d+]/g, "");
+  }
+
   const digits = trimmed.replace(/\D/g, "");
-  return digits.length === 10 ? `+1${digits}` : `+${digits}`;
+
+  return digits.length === 10
+    ? `+1${digits}`
+    : `+${digits}`;
 }
 
 function setupRecaptcha() {
-  if (window.recaptchaVerifier) return window.recaptchaVerifier;
+  if (window.recaptchaVerifier) {
+    return window.recaptchaVerifier;
+  }
 
   window.recaptchaVerifier = new RecaptchaVerifier(
     auth,
@@ -154,11 +170,15 @@ async function loadDirectory() {
   const snapshot = await getDocs(collection(db, "members"));
 
   members = snapshot.docs
-    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data()
+    }))
     .filter(member => member.name && member.phone)
     .sort((a, b) => a.name.localeCompare(b.name));
 
   render();
+  renderAdminPanel();
 }
 
 function render() {
@@ -186,11 +206,186 @@ function render() {
     link.textContent = `📞 ${member.phone}`;
 
     row.append(name, link);
+
+    if (currentUser && currentUser.phoneNumber === ADMIN_PHONE) {
+      const controls = document.createElement("div");
+      controls.style.marginTop = "12px";
+      controls.style.display = "flex";
+      controls.style.gap = "8px";
+
+      const editButton = document.createElement("button");
+      editButton.textContent = "Edit";
+      editButton.className = "secondary small";
+
+      editButton.onclick = () => editMember(member);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.textContent = "Delete";
+      deleteButton.className = "secondary small";
+
+      deleteButton.onclick = () => deleteMember(member);
+
+      controls.append(editButton, deleteButton);
+      row.appendChild(controls);
+    }
+
     list.appendChild(row);
   }
 }
 
+function renderAdminPanel() {
+  const oldPanel = document.querySelector("#adminPanel");
+
+  if (oldPanel) {
+    oldPanel.remove();
+  }
+
+  if (!currentUser || currentUser.phoneNumber !== ADMIN_PHONE) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adminPanel";
+  panel.className = "card";
+  panel.style.marginBottom = "20px";
+
+  panel.innerHTML = `
+    <h2>Admin</h2>
+    <p class="muted">Manage church directory members.</p>
+
+    <form id="addMemberForm">
+      <label for="memberName">Member name</label>
+      <input
+        id="memberName"
+        type="text"
+        placeholder="John Smith"
+        required
+      >
+
+      <label for="memberPhone">Phone number</label>
+      <input
+        id="memberPhone"
+        type="tel"
+        inputmode="tel"
+        placeholder="+1 859 555 1234"
+        required
+      >
+
+      <button type="submit">Add Member</button>
+    </form>
+
+    <p id="adminMessage" class="message"></p>
+  `;
+
+  directoryView.insertBefore(panel, search);
+
+  document.querySelector("#addMemberForm").addEventListener(
+    "submit",
+    addMember
+  );
+}
+
+async function addMember(event) {
+  event.preventDefault();
+
+  const nameInput = document.querySelector("#memberName");
+  const phoneInputAdmin = document.querySelector("#memberPhone");
+  const adminMessage = document.querySelector("#adminMessage");
+
+  const name = nameInput.value.trim();
+  const phone = normalizePhone(phoneInputAdmin.value);
+
+  if (!name || !phone) {
+    adminMessage.textContent = "Please enter a name and phone number.";
+    return;
+  }
+
+  try {
+    await setDoc(doc(db, "members", phone), {
+      name: name,
+      phone: phone
+    });
+
+    adminMessage.textContent = "Member added successfully.";
+
+    nameInput.value = "";
+    phoneInputAdmin.value = "";
+
+    await loadDirectory();
+  } catch (error) {
+    console.error(error);
+    adminMessage.textContent =
+      "Unable to add member. Please try again.";
+  }
+}
+
+async function editMember(member) {
+  const newName = prompt(
+    "Enter the member's name:",
+    member.name
+  );
+
+  if (newName === null) return;
+
+  const newPhoneInput = prompt(
+    "Enter the member's phone number:",
+    member.phone
+  );
+
+  if (newPhoneInput === null) return;
+
+  const newNameClean = newName.trim();
+  const newPhone = normalizePhone(newPhoneInput);
+
+  if (!newNameClean || !newPhone) {
+    alert("Name and phone number are required.");
+    return;
+  }
+
+  try {
+    await setDoc(doc(db, "members", newPhone), {
+      name: newNameClean,
+      phone: newPhone
+    });
+
+    if (newPhone !== member.id) {
+      await deleteDoc(doc(db, "members", member.id));
+    }
+
+    alert("Member updated successfully.");
+
+    await loadDirectory();
+  } catch (error) {
+    console.error(error);
+    alert("Unable to update member.");
+  }
+}
+
+async function deleteMember(member) {
+  if (member.phone === ADMIN_PHONE) {
+    alert("You cannot delete the administrator's directory entry.");
+    return;
+  }
+
+  const confirmed = confirm(
+    `Delete ${member.name} from the directory?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    await deleteDoc(doc(db, "members", member.id));
+
+    await loadDirectory();
+  } catch (error) {
+    console.error(error);
+    alert("Unable to delete member.");
+  }
+}
+
 onAuthStateChanged(auth, async (user) => {
+  currentUser = user;
+
   if (!user) {
     loginView.classList.remove("hidden");
     directoryView.classList.add("hidden");
@@ -216,6 +411,7 @@ onAuthStateChanged(auth, async (user) => {
       </div>
     `;
 
-    document.querySelector("#retrySignOut").onclick = () => signOut(auth);
+    document.querySelector("#retrySignOut").onclick = () =>
+      signOut(auth);
   }
 });
