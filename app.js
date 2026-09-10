@@ -1,15 +1,17 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {
-  getAuth, RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged, signOut
+  getAuth,
+  RecaptchaVerifier,
+  signInWithPhoneNumber,
+  onAuthStateChanged,
+  signOut
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
 import {
-  getFirestore, collection, getDocs
+  getFirestore,
+  collection,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
-/*
-  Replace ONLY the values below with the Web App configuration from:
-  Firebase Console -> Project settings -> Your apps -> Web app.
-*/
 const firebaseConfig = {
   apiKey: "AIzaSyAAiOuRXLfjcQRV4rA6twknG4ths7K07J4",
   authDomain: "church-directory-a3793.firebaseapp.com",
@@ -17,7 +19,6 @@ const firebaseConfig = {
   storageBucket: "church-directory-a3793.firebasestorage.app",
   messagingSenderId: "19161243529",
   appId: "1:19161243529:web:2e238ef54b2e0bfedecb58"
-};
 };
 
 const app = initializeApp(firebaseConfig);
@@ -50,36 +51,77 @@ function normalizePhone(value) {
 }
 
 function setupRecaptcha() {
-  if (window.recaptchaVerifier) return;
-  window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-    size: "normal"
-  });
+  if (window.recaptchaVerifier) return window.recaptchaVerifier;
+
+  window.recaptchaVerifier = new RecaptchaVerifier(
+    auth,
+    "recaptcha-container",
+    {
+      size: "normal",
+      callback: () => showMessage(""),
+      "expired-callback": () => {
+        showMessage("The security check expired. Please complete it again.");
+      }
+    }
+  );
+
+  return window.recaptchaVerifier;
 }
+
+async function renderRecaptcha() {
+  try {
+    const verifier = setupRecaptcha();
+    await verifier.render();
+  } catch (error) {
+    console.error("reCAPTCHA error:", error);
+    showMessage("Unable to load the security check. Please reload the page.");
+  }
+}
+
+renderRecaptcha();
 
 phoneForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   showMessage("");
+
   try {
-    setupRecaptcha();
+    if (!phoneInput.value.trim()) {
+      showMessage("Please enter your phone number.");
+      return;
+    }
+
     const phone = normalizePhone(phoneInput.value);
-    confirmationResult = await signInWithPhoneNumber(auth, phone, window.recaptchaVerifier);
+    const verifier = setupRecaptcha();
+
+    confirmationResult = await signInWithPhoneNumber(
+      auth,
+      phone,
+      verifier
+    );
+
     phoneForm.classList.add("hidden");
     codeForm.classList.remove("hidden");
     codeInput.focus();
+
     showMessage("Verification code sent by text.");
   } catch (error) {
-    console.error(error);
-    showMessage(error.message || "Unable to send the code.");
+    console.error("Phone sign-in error:", error);
+    showMessage(error.message || "Unable to send the verification code.");
+
     if (window.recaptchaVerifier) {
       window.recaptchaVerifier.clear();
       window.recaptchaVerifier = null;
     }
+
+    await renderRecaptcha();
   }
 });
 
 codeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+
   if (!confirmationResult) return;
+
   try {
     await confirmationResult.confirm(codeInput.value.trim());
     showMessage("");
@@ -94,36 +136,55 @@ document.querySelector("#changeNumber").addEventListener("click", () => {
   phoneForm.classList.remove("hidden");
   codeInput.value = "";
   showMessage("");
+
+  if (!window.recaptchaVerifier) {
+    renderRecaptcha();
+  }
 });
 
-document.querySelector("#signOut").addEventListener("click", () => signOut(auth));
+document.querySelector("#signOut").addEventListener("click", () => {
+  signOut(auth);
+});
 
 search.addEventListener("input", render);
 
 async function loadDirectory() {
   list.innerHTML = "<p class='muted'>Loading directory…</p>";
+
   const snapshot = await getDocs(collection(db, "members"));
-  members = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+
+  members = snapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
     .filter(member => member.name && member.phone)
     .sort((a, b) => a.name.localeCompare(b.name));
+
   render();
 }
 
 function render() {
   const term = search.value.trim().toLowerCase();
-  const filtered = members.filter(m => m.name.toLowerCase().includes(term));
+
+  const filtered = members.filter(member =>
+    member.name.toLowerCase().includes(term)
+  );
+
   list.innerHTML = "";
+
   empty.classList.toggle("hidden", filtered.length !== 0);
+
   for (const member of filtered) {
     const row = document.createElement("div");
     row.className = "member";
+
     const name = document.createElement("div");
     name.className = "member-name";
     name.textContent = member.name;
+
     const link = document.createElement("a");
     link.className = "member-phone";
     link.href = `tel:${member.phone}`;
     link.textContent = `📞 ${member.phone}`;
+
     row.append(name, link);
     list.appendChild(row);
   }
@@ -135,18 +196,26 @@ onAuthStateChanged(auth, async (user) => {
     directoryView.classList.add("hidden");
     return;
   }
+
   loginView.classList.add("hidden");
   directoryView.classList.remove("hidden");
+
   try {
     await loadDirectory();
   } catch (error) {
     console.error(error);
+
     directoryView.innerHTML = `
       <div class="card">
         <h1>Access denied</h1>
-        <p class="muted">Your phone number is not listed as a church member, or the directory is not configured correctly.</p>
+        <p class="muted">
+          Your phone number is not listed as a church member,
+          or the directory is not configured correctly.
+        </p>
         <button id="retrySignOut">Sign out</button>
-      </div>`;
+      </div>
+    `;
+
     document.querySelector("#retrySignOut").onclick = () => signOut(auth);
   }
 });
