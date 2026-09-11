@@ -1,7 +1,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
 import {
   getAuth,
-  RecaptchaVerifier,
+setPersistence,
+browserLocalPersistence,
+RecaptchaVerifier,
+  
   signInWithPhoneNumber,
   onAuthStateChanged,
   signOut
@@ -30,7 +33,7 @@ const ADMIN_PHONE = "+18595443280";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
+await setPersistence(auth, browserLocalPersistence);
 const loginView = document.querySelector("#loginView");
 const directoryView = document.querySelector("#directoryView");
 const phoneForm = document.querySelector("#phoneForm");
