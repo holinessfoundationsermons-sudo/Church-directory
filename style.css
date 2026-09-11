@@ -1,57 +1,197 @@
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
+
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: #111827;
-  background: #f7f7f8;
+  background: #061a36;
 }
-body { margin: 0; min-height: 100vh; }
-.app { width: min(680px, 100%); margin: 0 auto; padding: 24px 16px 48px; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #061a36 0%, #0b2b55 100%);
+}
+
+.app {
+  width: min(680px, 100%);
+  margin: 0 auto;
+  padding: 20px 14px 48px;
+}
+
 .card {
-  margin: 7vh auto 0; padding: 30px 22px; background: white; border-radius: 22px;
-  box-shadow: 0 8px 30px rgba(0,0,0,.08);
+  margin: 4vh auto 0;
+  padding: 28px 20px;
+  background: white;
+  border-radius: 24px;
+  border: 2px solid #d4a72c;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, .22);
 }
-.logo {
-  width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center;
-  background: #111827; color: white; font-size: 26px; margin-bottom: 18px;
+
+.church-logo {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+  margin: 0 auto 22px;
+  border-radius: 12px;
 }
-h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -.02em; }
-.muted { color: #6b7280; line-height: 1.5; }
-label { display:block; margin: 22px 0 8px; font-weight: 600; }
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 30px;
+  letter-spacing: -.02em;
+}
+
+h2 {
+  margin-top: 0;
+}
+
+.muted {
+  color: #667085;
+  line-height: 1.5;
+}
+
+label {
+  display: block;
+  margin: 22px 0 8px;
+  font-weight: 700;
+}
+
 input {
-  width: 100%; border: 1px solid #d1d5db; border-radius: 13px; padding: 14px 15px;
-  font-size: 17px; outline: none; background: white;
+  width: 100%;
+  border: 2px solid #d0d5dd;
+  border-radius: 14px;
+  padding: 14px 15px;
+  font-size: 17px;
+  outline: none;
+  background: white;
 }
-input:focus { border-color: #111827; box-shadow: 0 0 0 3px rgba(17,24,39,.08); }
+
+input:focus {
+  border-color: #d4a72c;
+  box-shadow: 0 0 0 3px rgba(212, 167, 44, .18);
+}
+
 button {
-  width: 100%; margin-top: 14px; border: 0; border-radius: 13px; padding: 14px 16px;
-  font-size: 16px; font-weight: 700; cursor: pointer; background: #111827; color: white;
+  width: 100%;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 14px;
+  padding: 15px 16px;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  background: #d4a72c;
+  color: #061a36;
 }
-button.secondary { background: #eef0f3; color: #111827; }
-button.small { width: auto; margin: 0; padding: 10px 13px; font-size: 14px; }
-button:disabled { opacity: .55; cursor: not-allowed; }
-.message { min-height: 24px; margin-top: 14px; font-size: 14px; }
-.hidden { display: none !important; }
+
+button.secondary {
+  background: #e9eef5;
+  color: #061a36;
+}
+
+button.small {
+  width: auto;
+  margin: 0;
+  padding: 10px 13px;
+  font-size: 14px;
+}
+
+button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.message {
+  min-height: 24px;
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .topbar {
-  display:flex; align-items:center; justify-content:space-between; gap:16px;
-  padding: 12px 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 4px 20px;
+  color: white;
 }
-.eyebrow { margin:0 0 3px; color:#6b7280; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
-.topbar h1 { font-size: 28px; }
-.search { margin: 0 0 14px; }
-.directory-list { display:flex; flex-direction:column; gap:10px; }
+
+.eyebrow {
+  margin: 0 0 3px;
+  color: #d4a72c;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.topbar h1 {
+  font-size: 30px;
+  margin: 0;
+}
+
+.search {
+  margin: 0 0 14px;
+  border-color: #d4a72c;
+}
+
+.directory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .member {
-  background:white; border-radius:16px; padding:16px 17px;
-  display:flex; align-items:center; justify-content:space-between; gap:14px;
-  box-shadow: 0 2px 12px rgba(0,0,0,.05);
+  background: white;
+  border-radius: 18px;
+  padding: 18px;
+  border-left: 5px solid #d4a72c;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .16);
 }
-.member-name { font-weight:700; font-size:17px; }
+
+.member-name {
+  font-weight: 800;
+  font-size: 19px;
+  margin-bottom: 10px;
+}
+
 .member-phone {
-  color:#111827; text-decoration:none; white-space:nowrap; font-weight:600;
+  color: #0b4f9c;
+  text-decoration: none;
+  font-weight: 700;
 }
-#recaptcha-container { margin-top: 12px; }
+
+#recaptcha-container {
+  margin-top: 12px;
+}
+
 @media (max-width: 480px) {
-  .app { padding: 14px 12px 32px; }
-  .card { margin-top: 4vh; padding: 24px 18px; }
-  .member { align-items:flex-start; flex-direction:column; }
-  .member-phone { width:100%; }
+  .app {
+    padding: 12px 12px 32px;
+  }
+
+  .card {
+    margin-top: 3vh;
+    padding: 22px 17px;
+  }
+
+  .church-logo {
+    max-width: 100%;
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .member-phone {
+    display: block;
+    width: 100%;
+  }
 }
