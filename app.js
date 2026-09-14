@@ -20,6 +20,7 @@ import {
   deleteDoc
 } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
+
 const firebaseConfig = {
   apiKey: "AIzaSyAAiOuRXLfjcQRV4rA6twknG4ths7K07J4",
   authDomain: "church-directory-a3793.firebaseapp.com",
@@ -31,37 +32,82 @@ const firebaseConfig = {
 
 const ADMIN_PHONE = "+18595443280";
 
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-await setPersistence(auth, browserLocalPersistence);
+await setPersistence(
+  auth,
+  browserLocalPersistence
+);
 
-const loginView = document.querySelector("#loginView");
-const registerView = document.querySelector("#registerView");
-const directoryView = document.querySelector("#directoryView");
 
-const phoneForm = document.querySelector("#phoneForm");
-const codeForm = document.querySelector("#codeForm");
-const registerForm = document.querySelector("#registerForm");
+const loginView =
+  document.querySelector("#loginView");
 
-const phoneInput = document.querySelector("#phone");
-const codeInput = document.querySelector("#code");
+const registerView =
+  document.querySelector("#registerView");
 
-const registerName = document.querySelector("#registerName");
-const registerPhone = document.querySelector("#registerPhone");
+const directoryView =
+  document.querySelector("#directoryView");
 
-const message = document.querySelector("#message");
-const registerMessage = document.querySelector("#registerMessage");
 
-const search = document.querySelector("#search");
-const list = document.querySelector("#directoryList");
-const empty = document.querySelector("#empty");
+const phoneForm =
+  document.querySelector("#phoneForm");
+
+const codeForm =
+  document.querySelector("#codeForm");
+
+const registerForm =
+  document.querySelector("#registerForm");
+
+
+const phoneInput =
+  document.querySelector("#phone");
+
+const codeInput =
+  document.querySelector("#code");
+
+
+const registerName =
+  document.querySelector("#registerName");
+
+const registerPhone =
+  document.querySelector("#registerPhone");
+
+
+const message =
+  document.querySelector("#message");
+
+const registerMessage =
+  document.querySelector("#registerMessage");
+
+
+const search =
+  document.querySelector("#search");
+
+const list =
+  document.querySelector("#directoryList");
+
+const empty =
+  document.querySelector("#empty");
+
 
 let confirmationResult = null;
+
 let registrationConfirmationResult = null;
+
 let members = [];
+
 let currentUser = null;
+
+let afterSignOutMessage = "";
+
+
+/* =========================
+   MESSAGES
+========================= */
 
 function showMessage(text) {
   message.textContent = text;
@@ -71,400 +117,790 @@ function showRegisterMessage(text) {
   registerMessage.textContent = text;
 }
 
+
+/* =========================
+   PHONE NUMBER
+========================= */
+
 function normalizePhone(value) {
-  const trimmed = value.trim();
+
+  const trimmed =
+    value.trim();
 
   if (trimmed.startsWith("+")) {
     return trimmed.replace(/[^\d+]/g, "");
   }
 
-  const digits = trimmed.replace(/\D/g, "");
+  const digits =
+    trimmed.replace(/\D/g, "");
 
-  return digits.length === 10
-    ? `+1${digits}`
-    : `+${digits}`;
-}
-
-function setupRecaptcha() {
-  if (window.recaptchaVerifier) {
-    return window.recaptchaVerifier;
+  if (digits.length === 10) {
+    return `+1${digits}`;
   }
 
-  window.recaptchaVerifier = new RecaptchaVerifier(
-    auth,
-    "recaptcha-container",
-    {
-      size: "normal",
-      callback: () => showMessage(""),
-      "expired-callback": () => {
-        showMessage(
-          "The security check expired. Please complete it again."
-        );
+  return `+${digits}`;
+}
+
+
+/* =========================
+   RECAPTCHA
+========================= */
+
+function getRecaptcha(
+  containerId,
+  type
+) {
+
+  const key =
+    type === "registration"
+      ? "registrationRecaptchaVerifier"
+      : "loginRecaptchaVerifier";
+
+  if (window[key]) {
+    return window[key];
+  }
+
+  window[key] =
+    new RecaptchaVerifier(
+      auth,
+      containerId,
+      {
+        size: "normal",
+
+        callback: () => {
+
+          if (
+            type === "registration"
+          ) {
+            showRegisterMessage("");
+          } else {
+            showMessage("");
+          }
+        },
+
+        "expired-callback": () => {
+
+          if (
+            type === "registration"
+          ) {
+
+            showRegisterMessage(
+              "The security check expired. Please complete it again."
+            );
+
+          } else {
+
+            showMessage(
+              "The security check expired. Please complete it again."
+            );
+          }
+        }
       }
-    }
-  );
+    );
 
-  return window.recaptchaVerifier;
+  return window[key];
 }
 
-async function renderRecaptcha() {
+
+async function renderLoginRecaptcha() {
+
   try {
-    const verifier = setupRecaptcha();
+
+    const verifier =
+      getRecaptcha(
+        "recaptcha-container",
+        "login"
+      );
+
     await verifier.render();
+
   } catch (error) {
-    console.error("reCAPTCHA error:", error);
+
+    console.error(
+      "Login reCAPTCHA error:",
+      error
+    );
   }
 }
 
-function showLogin() {
-  loginView.classList.remove("hidden");
-  registerView.classList.add("hidden");
-  directoryView.classList.add("hidden");
-}
 
-function showRegistration() {
-  loginView.classList.add("hidden");
-  registerView.classList.remove("hidden");
-  directoryView.classList.add("hidden");
-
-  showRegisterMessage("");
-}
-
-function showDirectory() {
-  loginView.classList.add("hidden");
-  registerView.classList.add("hidden");
-  directoryView.classList.remove("hidden");
-}
-
-renderRecaptcha();
-
-document.querySelector("#showRegister").addEventListener(
-  "click",
-  () => {
-    showRegistration();
-  }
-);
-
-document.querySelector("#backToLogin").addEventListener(
-  "click",
-  () => {
-    showLogin();
-    showMessage("");
-    showRegisterMessage("");
-  }
-);
-
-phoneForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  showMessage("");
+async function renderRegistrationRecaptcha() {
 
   try {
-    if (!phoneInput.value.trim()) {
-      showMessage("Please enter your phone number.");
+
+    const container =
+      document.querySelector(
+        "#registration-recaptcha-container"
+      );
+
+    if (!container) {
       return;
     }
 
-    const phone = normalizePhone(phoneInput.value);
-    const verifier = setupRecaptcha();
+    container.innerHTML = "";
 
-    confirmationResult = await signInWithPhoneNumber(
-      auth,
-      phone,
-      verifier
-    );
+    window.registrationRecaptchaVerifier = null;
 
-    phoneForm.classList.add("hidden");
-    codeForm.classList.remove("hidden");
+    const verifier =
+      getRecaptcha(
+        "registration-recaptcha-container",
+        "registration"
+      );
 
-    codeInput.focus();
+    await verifier.render();
 
-    showMessage("Verification code sent by text.");
   } catch (error) {
-    console.error("Phone sign-in error:", error);
 
-    showMessage(
-      error.message ||
-      "Unable to send the verification code."
+    console.error(
+      "Registration reCAPTCHA error:",
+      error
     );
+  }
+}
 
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-      window.recaptchaVerifier = null;
+
+/* =========================
+   VIEW CONTROL
+========================= */
+
+function showLogin() {
+
+  loginView.classList.remove(
+    "hidden"
+  );
+
+  registerView.classList.add(
+    "hidden"
+  );
+
+  directoryView.classList.add(
+    "hidden"
+  );
+}
+
+
+function showRegistration() {
+
+  loginView.classList.add(
+    "hidden"
+  );
+
+  registerView.classList.remove(
+    "hidden"
+  );
+
+  directoryView.classList.add(
+    "hidden"
+  );
+
+  showRegisterMessage("");
+
+  setTimeout(
+    renderRegistrationRecaptcha,
+    50
+  );
+}
+
+
+function showDirectory() {
+
+  loginView.classList.add(
+    "hidden"
+  );
+
+  registerView.classList.add(
+    "hidden"
+  );
+
+  directoryView.classList.remove(
+    "hidden"
+  );
+}
+
+
+/* =========================
+   INITIAL LOGIN RECAPTCHA
+========================= */
+
+renderLoginRecaptcha();
+
+
+/* =========================
+   REGISTER BUTTON
+========================= */
+
+document
+  .querySelector("#showRegister")
+  .addEventListener(
+    "click",
+    () => {
+
+      showRegistration();
+
     }
+  );
 
-    await renderRecaptcha();
-  }
-});
 
-codeForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
+/* =========================
+   BACK TO LOGIN
+========================= */
 
-  if (!confirmationResult) return;
+document
+  .querySelector("#backToLogin")
+  .addEventListener(
+    "click",
+    () => {
 
-  try {
-    await confirmationResult.confirm(
-      codeInput.value.trim()
-    );
+      showLogin();
+
+      showMessage("");
+
+      showRegisterMessage("");
+
+    }
+  );
+
+
+/* =========================
+   SIGN IN
+========================= */
+
+phoneForm.addEventListener(
+  "submit",
+  async (event) => {
+
+    event.preventDefault();
 
     showMessage("");
-  } catch (error) {
-    console.error(error);
 
-    showMessage(
-      "That code was not accepted. Please try again."
-    );
-  }
-});
+    try {
 
-document.querySelector("#changeNumber").addEventListener(
-  "click",
-  () => {
-    codeForm.classList.add("hidden");
-    phoneForm.classList.remove("hidden");
+      if (!phoneInput.value.trim()) {
 
-    codeInput.value = "";
-    showMessage("");
+        showMessage(
+          "Please enter your phone number."
+        );
 
-    if (!window.recaptchaVerifier) {
-      renderRecaptcha();
+        return;
+      }
+
+      const phone =
+        normalizePhone(
+          phoneInput.value
+        );
+
+      const verifier =
+        getRecaptcha(
+          "recaptcha-container",
+          "login"
+        );
+
+      confirmationResult =
+        await signInWithPhoneNumber(
+          auth,
+          phone,
+          verifier
+        );
+
+      phoneForm.classList.add(
+        "hidden"
+      );
+
+      codeForm.classList.remove(
+        "hidden"
+      );
+
+      codeInput.focus();
+
+      showMessage(
+        "Verification code sent by text."
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Phone sign-in error:",
+        error
+      );
+
+      showMessage(
+        error.message ||
+        "Unable to send the verification code."
+      );
+
+      resetLoginRecaptcha();
     }
   }
 );
 
-registerForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
 
-  showRegisterMessage("");
+/* =========================
+   VERIFY SIGN IN
+========================= */
 
-  const name = registerName.value.trim();
-  const phone = normalizePhone(registerPhone.value);
+codeForm.addEventListener(
+  "submit",
+  async (event) => {
 
-  if (!name || !phone) {
-    showRegisterMessage(
-      "Please enter your name and phone number."
-    );
-    return;
+    event.preventDefault();
+
+    if (!confirmationResult) {
+      return;
+    }
+
+    try {
+
+      await confirmationResult.confirm(
+        codeInput.value.trim()
+      );
+
+      showMessage("");
+
+    } catch (error) {
+
+      console.error(error);
+
+      showMessage(
+        "That code was not accepted. Please try again."
+      );
+    }
   }
+);
 
-  try {
-    const verifier = setupRecaptcha();
 
-    registrationConfirmationResult =
-      await signInWithPhoneNumber(
-        auth,
-        phone,
-        verifier
+/* =========================
+   CHANGE PHONE NUMBER
+========================= */
+
+document
+  .querySelector("#changeNumber")
+  .addEventListener(
+    "click",
+    () => {
+
+      codeForm.classList.add(
+        "hidden"
       );
 
-    registerForm.classList.add("hidden");
-
-    showRegisterMessage(
-      "Verification code sent by text. Enter the code below."
-    );
-
-    let codeBox = document.querySelector(
-      "#registrationCodeBox"
-    );
-
-    if (!codeBox) {
-      codeBox = document.createElement("div");
-      codeBox.id = "registrationCodeBox";
-
-      codeBox.innerHTML = `
-        <label for="registrationCode">
-          Verification code
-        </label>
-
-        <input
-          id="registrationCode"
-          type="text"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          maxlength="6"
-          placeholder="123456"
-        >
-
-        <button id="verifyRegistration" type="button">
-          Verify Registration
-        </button>
-      `;
-
-      registerForm.parentNode.insertBefore(
-        codeBox,
-        document.querySelector("#backToLogin")
+      phoneForm.classList.remove(
+        "hidden"
       );
 
-      document
-        .querySelector("#verifyRegistration")
-        .addEventListener(
-          "click",
-          completeRegistration
+      codeInput.value = "";
+
+      showMessage("");
+
+      resetLoginRecaptcha();
+
+      setTimeout(
+        renderLoginRecaptcha,
+        50
+      );
+    }
+  );
+
+
+/* =========================
+   RESET LOGIN RECAPTCHA
+========================= */
+
+function resetLoginRecaptcha() {
+
+  if (
+    window.loginRecaptchaVerifier
+  ) {
+
+    try {
+      window.loginRecaptchaVerifier.clear();
+    } catch (error) {
+      console.error(error);
+    }
+
+    window.loginRecaptchaVerifier = null;
+  }
+}
+
+
+/* =========================
+   RESET REGISTRATION RECAPTCHA
+========================= */
+
+function resetRegistrationRecaptcha() {
+
+  if (
+    window.registrationRecaptchaVerifier
+  ) {
+
+    try {
+      window.registrationRecaptchaVerifier.clear();
+    } catch (error) {
+      console.error(error);
+    }
+
+    window.registrationRecaptchaVerifier =
+      null;
+  }
+}
+
+
+/* =========================
+   REGISTRATION
+========================= */
+
+registerForm.addEventListener(
+  "submit",
+  async (event) => {
+
+    event.preventDefault();
+
+    showRegisterMessage("");
+
+    const name =
+      registerName.value.trim();
+
+    const phone =
+      normalizePhone(
+        registerPhone.value
+      );
+
+    if (!name || !phone) {
+
+      showRegisterMessage(
+        "Please enter your name and phone number."
+      );
+
+      return;
+    }
+
+    try {
+
+      const verifier =
+        getRecaptcha(
+          "registration-recaptcha-container",
+          "registration"
         );
+
+      registrationConfirmationResult =
+        await signInWithPhoneNumber(
+          auth,
+          phone,
+          verifier
+        );
+
+      registerForm.classList.add(
+        "hidden"
+      );
+
+      showRegisterMessage(
+        "Verification code sent by text. Enter the code below."
+      );
+
+      let codeBox =
+        document.querySelector(
+          "#registrationCodeBox"
+        );
+
+      if (!codeBox) {
+
+        codeBox =
+          document.createElement(
+            "div"
+          );
+
+        codeBox.id =
+          "registrationCodeBox";
+
+        codeBox.innerHTML = `
+          <label for="registrationCode">
+            Verification code
+          </label>
+
+          <input
+            id="registrationCode"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            placeholder="123456"
+          >
+
+          <button
+            id="verifyRegistration"
+            type="button"
+          >
+            Verify Registration
+          </button>
+        `;
+
+        registerForm.parentNode.insertBefore(
+          codeBox,
+          document.querySelector(
+            "#backToLogin"
+          )
+        );
+
+        document
+          .querySelector(
+            "#verifyRegistration"
+          )
+          .addEventListener(
+            "click",
+            completeRegistration
+          );
+      }
+
+    } catch (error) {
+
+      console.error(
+        "Registration error:",
+        error
+      );
+
+      showRegisterMessage(
+        error.message ||
+        "Unable to send the verification code."
+      );
+
+      resetRegistrationRecaptcha();
+
+      setTimeout(
+        renderRegistrationRecaptcha,
+        50
+      );
     }
-  } catch (error) {
-    console.error("Registration error:", error);
-
-    showRegisterMessage(
-      error.message ||
-      "Unable to send the verification code."
-    );
-
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-      window.recaptchaVerifier = null;
-    }
-
-    await renderRecaptcha();
   }
-});
+);
+
+
+/* =========================
+   COMPLETE REGISTRATION
+========================= */
 
 async function completeRegistration() {
-  const registrationCode =
-    document.querySelector("#registrationCode");
 
-  if (!registrationConfirmationResult) {
+  const registrationCode =
+    document.querySelector(
+      "#registrationCode"
+    );
+
+  if (
+    !registrationConfirmationResult
+  ) {
+
     showRegisterMessage(
       "Please request a verification code first."
     );
+
     return;
   }
 
-  if (!registrationCode.value.trim()) {
+  if (
+    !registrationCode ||
+    !registrationCode.value.trim()
+  ) {
+
     showRegisterMessage(
       "Please enter the verification code."
     );
+
     return;
   }
 
   try {
+
     const result =
       await registrationConfirmationResult.confirm(
         registrationCode.value.trim()
       );
 
-    const user = result.user;
-    const phone = user.phoneNumber;
-    const name = registerName.value.trim();
+    const user =
+      result.user;
 
-    const memberRef = doc(
-      db,
-      "members",
-      phone
-    );
+    const phone =
+      user.phoneNumber;
 
-    const pendingRef = doc(
-      db,
-      "registrationRequests",
-      phone
-    );
+    const name =
+      registerName.value.trim();
 
-    const memberSnap = await getDoc(memberRef);
+    if (!phone || !name) {
 
-    if (memberSnap.exists()) {
       showRegisterMessage(
-        "This phone number is already registered. Please return to Sign In."
+        "Your name or phone number is missing."
       );
 
       await signOut(auth);
+
       return;
     }
 
-    const pendingSnap = await getDoc(pendingRef);
 
-    if (pendingSnap.exists()) {
-      showRegisterMessage(
-        "Your registration is already pending approval."
+    /*
+      Create the pending request.
+
+      Firestore security rules will make sure:
+      - The phone matches the authenticated phone.
+      - The person cannot approve themselves.
+      - Only the administrator can approve it.
+      - An already-approved member cannot create
+        another registration request.
+    */
+
+    const pendingRef =
+      doc(
+        db,
+        "registrationRequests",
+        phone
       );
 
-      await signOut(auth);
-      return;
-    }
-
-    await setDoc(pendingRef, {
-      name: name,
-      phone: phone,
-      createdAt: new Date().toISOString()
-    });
-
-    showRegisterMessage(
-      "Registration submitted! Your request is now waiting for church administrator approval."
+    await setDoc(
+      pendingRef,
+      {
+        name: name,
+        phone: phone,
+        createdAt:
+          new Date().toISOString()
+      }
     );
 
-    registerForm.classList.remove("hidden");
 
-    const codeBox = document.querySelector(
-      "#registrationCodeBox"
-    );
+    const codeBox =
+      document.querySelector(
+        "#registrationCodeBox"
+      );
 
     if (codeBox) {
       codeBox.remove();
     }
 
+    registerForm.classList.remove(
+      "hidden"
+    );
+
     registerForm.reset();
+
+    registrationConfirmationResult =
+      null;
+
+    resetRegistrationRecaptcha();
+
+
+    afterSignOutMessage =
+      "Registration submitted! Your request is now waiting for church administrator approval.";
 
     await signOut(auth);
 
   } catch (error) {
+
     console.error(
       "Registration verification error:",
       error
     );
 
-    showRegisterMessage(
-      "That verification code was not accepted. Please try again."
-    );
+    if (
+      error.code ===
+      "permission-denied"
+    ) {
+
+      showRegisterMessage(
+        "This phone number may already be registered, or the registration request could not be submitted."
+      );
+
+    } else {
+
+      showRegisterMessage(
+        "That verification code was not accepted, or the registration could not be submitted."
+      );
+    }
   }
 }
 
-document.querySelector("#signOut").addEventListener(
-  "click",
-  () => {
-    signOut(auth);
-  }
-);
+
+/* =========================
+   SIGN OUT
+========================= */
+
+document
+  .querySelector("#signOut")
+  .addEventListener(
+    "click",
+    () => {
+
+      signOut(auth);
+
+    }
+  );
+
+
+/* =========================
+   SEARCH
+========================= */
 
 search.addEventListener(
   "input",
   render
 );
 
+
+/* =========================
+   LOAD DIRECTORY
+========================= */
+
 async function loadDirectory() {
+
   list.innerHTML =
     "<p class='muted'>Loading directory…</p>";
 
-  const snapshot = await getDocs(
-    collection(db, "members")
-  );
-
-  members = snapshot.docs
-    .map(docSnap => ({
-      id: docSnap.id,
-      ...docSnap.data()
-    }))
-    .filter(
-      member =>
-        member.name &&
-        member.phone
-    )
-    .sort(
-      (a, b) =>
-        a.name.localeCompare(b.name)
+  const snapshot =
+    await getDocs(
+      collection(
+        db,
+        "members"
+      )
     );
 
+  members =
+    snapshot.docs
+      .map(
+        docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data()
+        })
+      )
+      .filter(
+        member =>
+          member.name &&
+          member.phone
+      )
+      .sort(
+        (a, b) =>
+          a.name.localeCompare(
+            b.name
+          )
+      );
+
   render();
-  renderAdminPanel();
+
+  await renderAdminPanel();
 }
 
+
+/* =========================
+   RENDER DIRECTORY
+========================= */
+
 function render() {
+
   const term =
-    search.value.trim().toLowerCase();
+    search.value
+      .trim()
+      .toLowerCase();
 
   const filtered =
-    members.filter(member =>
-      member.name
-        .toLowerCase()
-        .includes(term)
+    members.filter(
+      member =>
+        member.name
+          .toLowerCase()
+          .includes(term)
     );
 
   list.innerHTML = "";
@@ -474,14 +910,23 @@ function render() {
     filtered.length !== 0
   );
 
-  for (const member of filtered) {
-    const row =
-      document.createElement("div");
+  for (
+    const member of filtered
+  ) {
 
-    row.className = "member";
+    const row =
+      document.createElement(
+        "div"
+      );
+
+    row.className =
+      "member";
+
 
     const name =
-      document.createElement("div");
+      document.createElement(
+        "div"
+      );
 
     name.className =
       "member-name";
@@ -489,8 +934,11 @@ function render() {
     name.textContent =
       member.name;
 
+
     const link =
-      document.createElement("a");
+      document.createElement(
+        "a"
+      );
 
     link.className =
       "member-phone";
@@ -501,14 +949,23 @@ function render() {
     link.textContent =
       `📞 ${member.phone}`;
 
-    row.append(name, link);
+
+    row.append(
+      name,
+      link
+    );
+
 
     if (
       currentUser &&
-      currentUser.phoneNumber === ADMIN_PHONE
+      currentUser.phoneNumber ===
+        ADMIN_PHONE
     ) {
+
       const controls =
-        document.createElement("div");
+        document.createElement(
+          "div"
+        );
 
       controls.style.marginTop =
         "12px";
@@ -519,8 +976,11 @@ function render() {
       controls.style.gap =
         "8px";
 
+
       const editButton =
-        document.createElement("button");
+        document.createElement(
+          "button"
+        );
 
       editButton.textContent =
         "Edit";
@@ -529,10 +989,14 @@ function render() {
         "secondary small";
 
       editButton.onclick =
-        () => editMember(member);
+        () =>
+          editMember(member);
+
 
       const deleteButton =
-        document.createElement("button");
+        document.createElement(
+          "button"
+        );
 
       deleteButton.textContent =
         "Delete";
@@ -541,21 +1005,34 @@ function render() {
         "secondary small";
 
       deleteButton.onclick =
-        () => deleteMember(member);
+        () =>
+          deleteMember(member);
+
 
       controls.append(
         editButton,
         deleteButton
       );
 
-      row.appendChild(controls);
+      row.appendChild(
+        controls
+      );
     }
 
-    list.appendChild(row);
+
+    list.appendChild(
+      row
+    );
   }
 }
 
+
+/* =========================
+   ADMIN PANEL
+========================= */
+
 async function renderAdminPanel() {
+
   const oldPanel =
     document.querySelector(
       "#adminPanel"
@@ -567,13 +1044,17 @@ async function renderAdminPanel() {
 
   if (
     !currentUser ||
-    currentUser.phoneNumber !== ADMIN_PHONE
+    currentUser.phoneNumber !==
+      ADMIN_PHONE
   ) {
     return;
   }
 
+
   const panel =
-    document.createElement("section");
+    document.createElement(
+      "section"
+    );
 
   panel.id =
     "adminPanel";
@@ -583,6 +1064,7 @@ async function renderAdminPanel() {
 
   panel.style.marginBottom =
     "20px";
+
 
   panel.innerHTML = `
     <h2>Admin</h2>
@@ -640,30 +1122,44 @@ async function renderAdminPanel() {
     ></p>
   `;
 
+
   directoryView.insertBefore(
     panel,
     search
   );
 
+
   document
-    .querySelector("#addMemberForm")
+    .querySelector(
+      "#addMemberForm"
+    )
     .addEventListener(
       "submit",
       addMember
     );
 
+
   await loadPendingRequests();
 }
 
+
+/* =========================
+   PENDING REGISTRATIONS
+========================= */
+
 async function loadPendingRequests() {
+
   const container =
     document.querySelector(
       "#pendingRequests"
     );
 
-  if (!container) return;
+  if (!container) {
+    return;
+  }
 
   try {
+
     const snapshot =
       await getDocs(
         collection(
@@ -672,25 +1168,34 @@ async function loadPendingRequests() {
         )
       );
 
+
     if (snapshot.empty) {
+
       container.innerHTML =
         "<p class='muted'>No pending registrations.</p>";
 
       return;
     }
 
+
     container.innerHTML = "";
+
 
     snapshot.docs.forEach(
       requestDoc => {
+
         const request =
           requestDoc.data();
 
+
         const item =
-          document.createElement("div");
+          document.createElement(
+            "div"
+          );
 
         item.className =
           "member";
+
 
         item.innerHTML = `
           <div class="member-name">
@@ -712,6 +1217,7 @@ async function loadPendingRequests() {
               margin-top:12px;
             "
           >
+
             <button
               class="small"
               data-action="approve"
@@ -725,8 +1231,10 @@ async function loadPendingRequests() {
             >
               Reject
             </button>
+
           </div>
         `;
+
 
         item
           .querySelector(
@@ -739,6 +1247,7 @@ async function loadPendingRequests() {
               request
             );
 
+
         item
           .querySelector(
             '[data-action="reject"]'
@@ -749,10 +1258,15 @@ async function loadPendingRequests() {
               requestDoc.id
             );
 
-        container.appendChild(item);
+
+        container.appendChild(
+          item
+        );
       }
     );
+
   } catch (error) {
+
     console.error(error);
 
     container.innerHTML =
@@ -760,11 +1274,18 @@ async function loadPendingRequests() {
   }
 }
 
+
+/* =========================
+   APPROVE REQUEST
+========================= */
+
 async function approveRequest(
   requestId,
   request
 ) {
+
   try {
+
     await setDoc(
       doc(
         db,
@@ -777,6 +1298,7 @@ async function approveRequest(
       }
     );
 
+
     await deleteDoc(
       doc(
         db,
@@ -785,12 +1307,16 @@ async function approveRequest(
       )
     );
 
+
     alert(
       `${request.name} has been approved.`
     );
 
+
     await loadDirectory();
+
   } catch (error) {
+
     console.error(error);
 
     alert(
@@ -799,17 +1325,27 @@ async function approveRequest(
   }
 }
 
+
+/* =========================
+   REJECT REQUEST
+========================= */
+
 async function rejectRequest(
   requestId
 ) {
+
   const confirmed =
     confirm(
       "Reject this registration request?"
     );
 
-  if (!confirmed) return;
+  if (!confirmed) {
+    return;
+  }
+
 
   try {
+
     await deleteDoc(
       doc(
         db,
@@ -818,8 +1354,11 @@ async function rejectRequest(
       )
     );
 
+
     await loadDirectory();
+
   } catch (error) {
+
     console.error(error);
 
     alert(
@@ -828,9 +1367,17 @@ async function rejectRequest(
   }
 }
 
+
+/* =========================
+   ESCAPE HTML
+========================= */
+
 function escapeHtml(value) {
+
   const div =
-    document.createElement("div");
+    document.createElement(
+      "div"
+    );
 
   div.textContent =
     value;
@@ -838,8 +1385,17 @@ function escapeHtml(value) {
   return div.innerHTML;
 }
 
-async function addMember(event) {
+
+/* =========================
+   ADD MEMBER
+========================= */
+
+async function addMember(
+  event
+) {
+
   event.preventDefault();
+
 
   const nameInput =
     document.querySelector(
@@ -856,6 +1412,7 @@ async function addMember(event) {
       "#adminMessage"
     );
 
+
   const name =
     nameInput.value.trim();
 
@@ -864,14 +1421,18 @@ async function addMember(event) {
       phoneInputAdmin.value
     );
 
+
   if (!name || !phone) {
+
     adminMessage.textContent =
       "Please enter a name and phone number.";
 
     return;
   }
 
+
   try {
+
     await setDoc(
       doc(
         db,
@@ -884,15 +1445,19 @@ async function addMember(event) {
       }
     );
 
+
     adminMessage.textContent =
       "Member added successfully.";
 
     nameInput.value = "";
+
     phoneInputAdmin.value = "";
+
 
     await loadDirectory();
 
   } catch (error) {
+
     console.error(error);
 
     adminMessage.textContent =
@@ -900,14 +1465,25 @@ async function addMember(event) {
   }
 }
 
-async function editMember(member) {
+
+/* =========================
+   EDIT MEMBER
+========================= */
+
+async function editMember(
+  member
+) {
+
   const newName =
     prompt(
       "Enter the member's name:",
       member.name
     );
 
-  if (newName === null) return;
+  if (newName === null) {
+    return;
+  }
+
 
   const newPhoneInput =
     prompt(
@@ -915,7 +1491,10 @@ async function editMember(member) {
       member.phone
     );
 
-  if (newPhoneInput === null) return;
+  if (newPhoneInput === null) {
+    return;
+  }
+
 
   const newNameClean =
     newName.trim();
@@ -925,10 +1504,12 @@ async function editMember(member) {
       newPhoneInput
     );
 
+
   if (
     !newNameClean ||
     !newPhone
   ) {
+
     alert(
       "Name and phone number are required."
     );
@@ -936,7 +1517,9 @@ async function editMember(member) {
     return;
   }
 
+
   try {
+
     await setDoc(
       doc(
         db,
@@ -949,9 +1532,11 @@ async function editMember(member) {
       }
     );
 
+
     if (
       newPhone !== member.id
     ) {
+
       await deleteDoc(
         doc(
           db,
@@ -961,13 +1546,16 @@ async function editMember(member) {
       );
     }
 
+
     alert(
       "Member updated successfully."
     );
 
+
     await loadDirectory();
 
   } catch (error) {
+
     console.error(error);
 
     alert(
@@ -976,10 +1564,20 @@ async function editMember(member) {
   }
 }
 
-async function deleteMember(member) {
+
+/* =========================
+   DELETE MEMBER
+========================= */
+
+async function deleteMember(
+  member
+) {
+
   if (
-    member.phone === ADMIN_PHONE
+    member.phone ===
+    ADMIN_PHONE
   ) {
+
     alert(
       "You cannot delete the administrator's directory entry."
     );
@@ -987,14 +1585,20 @@ async function deleteMember(member) {
     return;
   }
 
+
   const confirmed =
     confirm(
       `Delete ${member.name} from the directory?`
     );
 
-  if (!confirmed) return;
+
+  if (!confirmed) {
+    return;
+  }
+
 
   try {
+
     await deleteDoc(
       doc(
         db,
@@ -1003,9 +1607,11 @@ async function deleteMember(member) {
       )
     );
 
+
     await loadDirectory();
 
   } catch (error) {
+
     console.error(error);
 
     alert(
@@ -1014,7 +1620,15 @@ async function deleteMember(member) {
   }
 }
 
-async function checkMemberAccess(user) {
+
+/* =========================
+   CHECK APPROVED MEMBER
+========================= */
+
+async function checkMemberAccess(
+  user
+) {
+
   const memberRef =
     doc(
       db,
@@ -1023,12 +1637,22 @@ async function checkMemberAccess(user) {
     );
 
   const memberSnap =
-    await getDoc(memberRef);
+    await getDoc(
+      memberRef
+    );
 
   return memberSnap.exists();
 }
 
-async function checkPendingRequest(user) {
+
+/* =========================
+   CHECK PENDING REQUEST
+========================= */
+
+async function checkPendingRequest(
+  user
+) {
+
   const pendingRef =
     doc(
       db,
@@ -1037,73 +1661,140 @@ async function checkPendingRequest(user) {
     );
 
   const pendingSnap =
-    await getDoc(pendingRef);
+    await getDoc(
+      pendingRef
+    );
 
   return pendingSnap.exists();
 }
 
+
+/* =========================
+   AUTH STATE
+========================= */
+
 onAuthStateChanged(
   auth,
   async (user) => {
-    currentUser = user;
+
+    currentUser =
+      user;
+
 
     if (!user) {
+
       showLogin();
+
+
+      if (
+        afterSignOutMessage
+      ) {
+
+        showMessage(
+          afterSignOutMessage
+        );
+
+        afterSignOutMessage =
+          "";
+      }
+
+
       return;
     }
 
+
     try {
+
       const isAdmin =
         user.phoneNumber ===
         ADMIN_PHONE;
 
+
       if (isAdmin) {
+
         showDirectory();
+
         await loadDirectory();
+
         return;
       }
 
-      const isMember =
-        await checkMemberAccess(
-          user
+
+      /*
+        Important:
+        We first check whether the user is already
+        an approved member.
+
+        If Firestore denies that read because the
+        person isn't approved, we then check the
+        registration request.
+
+        The Firestore rules will be updated next
+        so this flow works securely.
+      */
+
+      let isMember = false;
+
+      try {
+
+        isMember =
+          await checkMemberAccess(
+            user
+          );
+
+      } catch (memberError) {
+
+        console.log(
+          "Member access check:",
+          memberError
         );
 
+        isMember = false;
+      }
+
+
       if (isMember) {
+
         showDirectory();
+
         await loadDirectory();
+
         return;
       }
+
 
       const isPending =
         await checkPendingRequest(
           user
         );
 
-      await signOut(auth);
+
+      await signOut(
+        auth
+      );
+
 
       if (isPending) {
-        showLogin();
 
-        showMessage(
-          "Your registration is pending church administrator approval."
-        );
+        afterSignOutMessage =
+          "Your registration is pending church administrator approval.";
+
       } else {
-        showLogin();
 
-        showMessage(
-          "Your phone number is not approved for the Church Directory."
-        );
+        afterSignOutMessage =
+          "Your phone number is not approved for the Church Directory.";
       }
 
+
     } catch (error) {
+
       console.error(error);
 
-      await signOut(auth);
+      afterSignOutMessage =
+        "Unable to verify your directory access.";
 
-      showLogin();
-
-      showMessage(
-        "Unable to verify your directory access."
+      await signOut(
+        auth
       );
     }
   }
